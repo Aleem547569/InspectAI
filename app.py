@@ -22,17 +22,17 @@ CORS(app)
 # ── Models & API Client ────────────────────────────────────────────────────────
 print("⚙  Loading YOLO model...")
 model = YOLO("yolo11n.pt")
+print("✅  YOLO ready")
 claude = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 # ── Global State ───────────────────────────────────────────────────────────────
-_lock            = threading.Lock()
-_last_verdict    = None
-_last_detections = []
-_last_frame_w    = 640
-_last_frame_h    = 480
+_yolo_lock        = threading.Lock()   # one YOLO call at a time
+_state_lock       = threading.Lock()
+_last_verdict     = None
+_last_detections  = []
+_last_frame_w     = 640
+_last_frame_h     = 480
 _last_analysis_ts = 0
-_processing      = False   # is a background inference running?
-_pending_frame   = None    # latest frame bytes waiting to be processed
 
 _log: deque = deque(maxlen=50)
 _stats = {"total": 0, "PASS": 0, "REWORK": 0, "QUARANTINE": 0, "SCRAP": 0}
@@ -56,72 +56,44 @@ CLAUDE_PROMPT = (
 )
 
 
-# ── Background inference thread ────────────────────────────────────────────────
-def _run_inference(frame_bytes):
-    global _processing, _last_verdict, _last_detections, _last_frame_w, _last_frame_h, _last_analysis_ts
+def _run_yolo(frame):
+    """Run YOLO synchronously. Returns (detections, best_det)."""
+    h, w = frame.shape[:2]
+    results = model(frame, verbose=False, conf=0.10)
 
-    try:
-        nparr = np.frombuffer(frame_bytes, np.uint8)
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if frame is None:
-            return
+    detections = []
+    best_det   = None
+    best_area  = 0
 
-        h, w = frame.shape[:2]
+    for r in results:
+        for box in r.boxes:
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+            cls_name = model.names[int(box.cls[0])]
+            conf     = float(box.conf[0])
+            area     = (x2 - x1) * (y2 - y1)
 
-        results = model(frame, verbose=False, conf=0.10)
+            detections.append({
+                "x1": x1, "y1": y1, "x2": x2, "y2": y2,
+                "class_name": cls_name,
+                "conf": round(conf, 3),
+            })
 
-        detections = []
-        best_det   = None
-        best_area  = 0
+            if area > best_area:
+                best_area = area
+                pad  = 15
+                crop = frame[
+                    max(0, y1 - pad): min(h, y2 + pad),
+                    max(0, x1 - pad): min(w, x2 + pad)
+                ]
+                if crop.size > 0:
+                    _, buf = cv2.imencode('.jpg', crop, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                    best_det = {
+                        "crop_b64":   base64.b64encode(buf).decode(),
+                        "class_name": cls_name,
+                        "conf":       round(conf, 3),
+                    }
 
-        for r in results:
-            for box in r.boxes:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                cls_name = model.names[int(box.cls[0])]
-                conf     = float(box.conf[0])
-                area     = (x2 - x1) * (y2 - y1)
-
-                detections.append({
-                    "x1": x1, "y1": y1, "x2": x2, "y2": y2,
-                    "class_name": cls_name,
-                    "conf": round(conf, 3),
-                })
-
-                if area > best_area:
-                    best_area = area
-                    pad  = 15
-                    crop = frame[
-                        max(0, y1 - pad): min(h, y2 + pad),
-                        max(0, x1 - pad): min(w, x2 + pad)
-                    ]
-                    if crop.size > 0:
-                        _, buf = cv2.imencode('.jpg', crop, [cv2.IMWRITE_JPEG_QUALITY, 85])
-                        best_det = {
-                            "crop_b64":  base64.b64encode(buf).decode(),
-                            "class_name": cls_name,
-                            "conf":       round(conf, 3),
-                        }
-
-        with _lock:
-            _last_detections = detections
-            _last_frame_w    = w
-            _last_frame_h    = h
-
-        # Claude analysis with cooldown
-        if best_det:
-            now = time.time()
-            with _lock:
-                last_ts = _last_analysis_ts
-            if now - last_ts >= 3.0:
-                with _lock:
-                    _last_analysis_ts = now
-                _call_claude(best_det)
-
-    except Exception as e:
-        print(f"Inference error: {e}")
-    finally:
-        with _lock:
-            _processing = False
+    return detections, best_det, w, h
 
 
 def _call_claude(best_det):
@@ -133,37 +105,30 @@ def _call_claude(best_det):
             messages=[{
                 "role": "user",
                 "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/jpeg",
-                            "data": best_det["crop_b64"],
-                        },
-                    },
+                    {"type": "image", "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": best_det["crop_b64"],
+                    }},
                     {"type": "text", "text": CLAUDE_PROMPT},
                 ],
             }],
         )
-
         raw = msg.content[0].text.strip()
         try:
             verdict_data = json.loads(raw)
         except json.JSONDecodeError:
             m = re.search(r'\{.*\}', raw, re.DOTALL)
             verdict_data = json.loads(m.group()) if m else {
-                "verdict": "QUARANTINE",
-                "defect_type": "Parse error",
-                "severity": "medium",
-                "reasoning": raw[:300],
-                "confidence": 0.5,
+                "verdict": "QUARANTINE", "defect_type": "Parse error",
+                "severity": "medium", "reasoning": raw[:300], "confidence": 0.5,
             }
 
         verdict_data["class_name"] = best_det["class_name"]
         verdict_data["conf"]       = best_det["conf"]
         verdict_data["timestamp"]  = datetime.now().strftime("%H:%M:%S")
 
-        with _lock:
+        with _state_lock:
             _last_verdict = verdict_data
 
         v = verdict_data.get("verdict", "SCRAP")
@@ -192,41 +157,68 @@ def index():
 
 @app.route('/process_frame', methods=['POST'])
 def process_frame():
-    global _processing, _pending_frame
+    global _last_detections, _last_frame_w, _last_frame_h, _last_analysis_ts
 
     data = request.get_json(force=True)
     if not data or 'image' not in data:
         return jsonify({"status": "error", "message": "No image provided"}), 400
 
     try:
-        frame_bytes = base64.b64decode(data['image'])
+        img_bytes = base64.b64decode(data['image'])
+        nparr = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if frame is None:
+            raise ValueError("imdecode failed")
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
 
-    # Fire inference in background if not already running
-    with _lock:
-        already_running = _processing
-        if not already_running:
-            _processing = True
+    # If YOLO is already running, return cached results immediately
+    if not _yolo_lock.acquire(blocking=False):
+        with _state_lock:
+            return jsonify({
+                "status":     "ok",
+                "detections": list(_last_detections),
+                "verdict":    dict(_last_verdict) if _last_verdict else None,
+                "frame_w":    _last_frame_w,
+                "frame_h":    _last_frame_h,
+            })
 
-    if not already_running:
-        t = threading.Thread(target=_run_inference, args=(frame_bytes,), daemon=True)
-        t.start()
+    try:
+        detections, best_det, w, h = _run_yolo(frame)
 
-    # Return immediately with cached results
-    with _lock:
-        detections = list(_last_detections)
-        verdict    = dict(_last_verdict) if _last_verdict else None
-        fw         = _last_frame_w
-        fh         = _last_frame_h
+        with _state_lock:
+            _last_detections = detections
+            _last_frame_w    = w
+            _last_frame_h    = h
 
-    return jsonify({
-        "status":     "ok",
-        "detections": detections,
-        "verdict":    verdict,
-        "frame_w":    fw,
-        "frame_h":    fh,
-    })
+        # Claude analysis with cooldown — run in background so we return fast
+        now = time.time()
+        with _state_lock:
+            last_ts = _last_analysis_ts
+
+        if best_det and (now - last_ts) >= 3.0:
+            with _state_lock:
+                _last_analysis_ts = now
+            t = threading.Thread(target=_call_claude, args=(best_det,), daemon=True)
+            t.start()
+
+        with _state_lock:
+            verdict = dict(_last_verdict) if _last_verdict else None
+
+        return jsonify({
+            "status":     "ok",
+            "detections": detections,
+            "verdict":    verdict,
+            "frame_w":    w,
+            "frame_h":    h,
+        })
+
+    except Exception as e:
+        print(f"process_frame error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+    finally:
+        _yolo_lock.release()
 
 
 @app.route('/stats')
@@ -245,11 +237,9 @@ def inspection_log():
 
 # ── Entry Point ────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
-    print("\n╔══════════════════════════════════════╗")
-    print("║   InspectAI  —  RoboAI Hackathon     ║")
-    print("║   AI-Powered Industrial Inspector    ║")
-    print("╚══════════════════════════════════════╝")
     port = int(os.environ.get("PORT", 5001))
-    print(f"🤖  YOLO11n + Claude Vision API ready")
+    print(f"\n╔══════════════════════════════════════╗")
+    print(f"║   InspectAI  —  RoboAI Hackathon     ║")
+    print(f"╚══════════════════════════════════════╝")
     print(f"🌐  Open → http://localhost:{port}\n")
     app.run(debug=False, host='0.0.0.0', port=port, threaded=True)
