@@ -68,7 +68,7 @@ def _run_inference(frame_bytes):
 
         h, w = frame.shape[:2]
 
-        results = model(frame, verbose=False, conf=0.20)
+        results = model(frame, verbose=False, conf=0.10)
 
         detections = []
         best_det   = None
