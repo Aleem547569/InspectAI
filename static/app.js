@@ -98,41 +98,17 @@ async function sendFrame() {
     const scaleX = overlayCanvas.width  / (data.frame_w || webcam.videoWidth);
     const scaleY = overlayCanvas.height / (data.frame_h || webcam.videoHeight);
 
-    // Draw YOLO bounding boxes
-    if (data.detections && data.detections.length) {
-      const verdictKey = data.verdict?.verdict ?? 'ANALYZING';
-      const boxColor   = COLORS_RGBA[verdictKey] ?? COLORS_RGBA.ANALYZING;
-
-      data.detections.forEach(det => {
-        const x  = det.x1 * scaleX;
-        const y  = det.y1 * scaleY;
-        const w  = (det.x2 - det.x1) * scaleX;
-        const h  = (det.y2 - det.y1) * scaleY;
-        const lbl = `${det.class_name}  ${Math.round(det.conf * 100)}%`;
-
-        overlayCtx.strokeStyle = boxColor;
-        overlayCtx.lineWidth   = 2;
-        overlayCtx.strokeRect(x, y, w, h);
-
-        overlayCtx.font         = '13px "Share Tech Mono", monospace';
-        const tw = overlayCtx.measureText(lbl).width;
-        overlayCtx.fillStyle    = boxColor;
-        overlayCtx.fillRect(x, y - 22, tw + 10, 20);
-        overlayCtx.fillStyle    = '#000';
-        overlayCtx.fillText(lbl, x + 5, y - 7);
-      });
-
-      objectTag.textContent = data.detections[0].class_name +
-        (data.verdict?.verdict ? `  ·  ${data.verdict.verdict}` : '  ·  ANALYZING');
+    // Update object tag from Claude verdict
+    if (data.verdict?.class_name) {
+      objectTag.textContent = `${data.verdict.class_name}  ·  ${data.verdict.verdict ?? 'ANALYZING'}`;
     } else {
       objectTag.textContent = '— scanning —';
-      moveArm('IDLE');
     }
 
     if (data.verdict?.verdict) {
       applyVerdict(data.verdict);
-      setStatus('ANALYZING', true);
-    } else if (!data.detections?.length) {
+      setStatus('LIVE', true);
+    } else {
       setStatus('SCANNING');
     }
   } catch {
