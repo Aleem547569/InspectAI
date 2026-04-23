@@ -221,6 +221,30 @@ def process_frame():
         _yolo_lock.release()
 
 
+@app.route('/test_yolo', methods=['POST'])
+def test_yolo():
+    """Debug endpoint — runs YOLO directly, no caching or locks."""
+    data = request.get_json(force=True)
+    try:
+        img_bytes = base64.b64decode(data['image'])
+        nparr = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if frame is None:
+            return jsonify({"error": "imdecode returned None"}), 400
+        h, w = frame.shape[:2]
+        results = model(frame, verbose=False, conf=0.10)
+        dets = []
+        for r in results:
+            for box in r.boxes:
+                dets.append({
+                    "class": model.names[int(box.cls[0])],
+                    "conf": round(float(box.conf[0]), 3)
+                })
+        return jsonify({"w": w, "h": h, "detections": dets})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/stats')
 def stats():
     with _stats_lock:
