@@ -76,7 +76,7 @@ def process_frame():
         return jsonify({"status": "error", "message": str(e)}), 400
 
     # Run YOLO detection
-    results = model(frame, verbose=False, conf=0.35)
+    results = model(frame, verbose=False, conf=0.20)
 
     detections = []
     best_det = None

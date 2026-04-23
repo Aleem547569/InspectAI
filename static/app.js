@@ -51,7 +51,7 @@ const pieCtx        = pieCanvas.getContext('2d');
 async function startWebcam() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'environment' },
+      video: { width: { ideal: 640 }, height: { ideal: 480 } },
       audio: false,
     });
     webcam.srcObject = stream;
