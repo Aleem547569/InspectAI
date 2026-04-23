@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InspectAI — Industrial Quality Inspector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- ── HEADER ─────────────────────────────────────────────────────────────── -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="logo-mark">
+        <svg width="36" height="36" viewBox="0 0 36 36">
+          <circle cx="18" cy="18" r="16" fill="none" stroke="#00ccff" stroke-width="1.5"/>
+          <circle cx="18" cy="18" r="10" fill="none" stroke="#00ccff" stroke-width="1"/>
+          <circle cx="18" cy="18" r="4" fill="#00ccff"/>
+          <line x1="2" y1="18" x2="8" y2="18" stroke="#00ccff" stroke-width="1.5"/>
+          <line x1="28" y1="18" x2="34" y2="18" stroke="#00ccff" stroke-width="1.5"/>
+          <line x1="18" y1="2" x2="18" y2="8" stroke="#00ccff" stroke-width="1.5"/>
+          <line x1="18" y1="28" x2="18" y2="34" stroke="#00ccff" stroke-width="1.5"/>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <span class="logo-title">InspectAI</span>
+        <span class="logo-sub">Industrial Vision System v1.0</span>
+      </div>
+    </div>
+
+    <div class="sdg-banner">
+      <span class="sdg-icon">⚙</span>
+      <span>SDG&nbsp;9 &mdash; Inclusive Industrialization &nbsp;·&nbsp; RoboAI Hackathon 2025</span>
+    </div>
+
+    <div class="header-right">
+      <div class="status-pill" id="status-pill">
+        <span class="pulse-dot"></span>
+        <span id="status-text">INITIALIZING</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── MAIN GRID ──────────────────────────────────────────────────────────── -->
+  <main class="main-grid">
+
+    <!-- Camera Feed ─────────────────────────────────────────────────────────── -->
+    <section class="panel camera-panel">
+      <div class="panel-header">
+        <span class="panel-icon">◈</span>
+        <span>LIVE CAMERA FEED</span>
+        <span class="live-badge"><span class="pulse-dot red"></span>LIVE</span>
+      </div>
+      <div class="camera-wrap">
+        <video id="webcam" autoplay playsinline muted></video>
+        <canvas id="overlay-canvas"></canvas>
+        <div class="scan-line"></div>
+        <div class="camera-corners">
+          <div class="corner tl"></div><div class="corner tr"></div>
+          <div class="corner bl"></div><div class="corner br"></div>
+        </div>
+        <div class="object-tag" id="object-tag">— Waiting for object —</div>
+      </div>
+    </section>
+
+    <!-- Right column ────────────────────────────────────────────────────────── -->
+    <div class="right-col">
+
+      <!-- Robot Arm ───────────────────────────────────────────────────────────── -->
+      <section class="panel arm-panel">
+        <div class="panel-header">
+          <span class="panel-icon">◈</span>
+          <span>ROBOTIC SORTING ARM</span>
+          <span class="arm-state" id="arm-state">IDLE</span>
+        </div>
+
+        <svg id="robot-svg" viewBox="0 0 420 310" xmlns="http://www.w3.org/2000/svg">
+          <!-- Grid background -->
+          <defs>
+            <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#0d2035" stroke-width="0.5"/>
+            </pattern>
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+              <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <rect width="420" height="310" fill="url(#grid)" rx="6"/>
+
+          <!-- Ceiling mount rail ──────────────────────────────────────────── -->
+          <rect x="10" y="28" width="400" height="10" rx="5" fill="#0e2038"/>
+          <rect x="10" y="29" width="400" height="3" rx="2" fill="#1a4070" opacity="0.7"/>
+          <!-- Rail bolts -->
+          <circle cx="30"  cy="33" r="4" fill="#0a1828"/><circle cx="30"  cy="33" r="2" fill="#1a3555"/>
+          <circle cx="390" cy="33" r="4" fill="#0a1828"/><circle cx="390" cy="33" r="2" fill="#1a3555"/>
+          <circle cx="210" cy="33" r="4" fill="#0a1828"/><circle cx="210" cy="33" r="2" fill="#1a3555"/>
+
+          <!-- Conveyor belt base ───────────────────────────────────────────── -->
+          <rect x="10" y="240" width="400" height="14" rx="4" fill="#0b1a2c"/>
+          <rect x="10" y="241" width="400" height="5" rx="2" fill="#122035" opacity="0.6"/>
+          <!-- Belt segments -->
+          <line x1="40"  y1="240" x2="40"  y2="254" stroke="#0d2035" stroke-width="1.5"/>
+          <line x1="80"  y1="240" x2="80"  y2="254" stroke="#0d2035" stroke-width="1.5"/>
+          <line x1="120" y1="240" x2="120" y2="254" stroke="#0d2035" stroke-width="1.5"/>
+          <line x1="160" y1="240" x2="160" y2="254" stroke="#0d2035" stroke-width="1.5"/>
+          <line x1="200" y1="240" x2="200" y2="254" stroke="#0d2035" stroke-width="1.5"/>
+          <line x1="240" y1="240" x2="240" y2="254" stroke="#0d2035" stroke-width="1.5"/>
+          <line x1="280" y1="240" x2="280" y2="254" stroke="#0d2035" stroke-width="1.5"/>
+          <line x1="320" y1="240" x2="320" y2="254" stroke="#0d2035" stroke-width="1.5"/>
+          <line x1="360" y1="240" x2="360" y2="254" stroke="#0d2035" stroke-width="1.5"/>
+
+          <!-- ── BINS ──────────────────────────────────────────────────────── -->
+          <!-- PASS bin -->
+          <g id="bin-PASS">
+            <rect x="15"  y="262" width="80" height="40" rx="4" fill="#001508" stroke="#00e676" stroke-width="1.5"/>
+            <rect x="15"  y="262" width="80" height="8"  rx="4" fill="#002510"/>
+            <text x="55"  y="279" text-anchor="middle" fill="#00e676" font-family="Orbitron,sans-serif" font-size="9" font-weight="700">PASS</text>
+            <text x="55"  y="294" text-anchor="middle" fill="#005520" font-family="Share Tech Mono,monospace" font-size="8">APPROVED</text>
+          </g>
+          <!-- REWORK bin -->
+          <g id="bin-REWORK">
+            <rect x="115" y="262" width="80" height="40" rx="4" fill="#151000" stroke="#ffd600" stroke-width="1.5"/>
+            <rect x="115" y="262" width="80" height="8"  rx="4" fill="#251a00"/>
+            <text x="155" y="279" text-anchor="middle" fill="#ffd600" font-family="Orbitron,sans-serif" font-size="9" font-weight="700">REWORK</text>
+            <text x="155" y="294" text-anchor="middle" fill="#554400" font-family="Share Tech Mono,monospace" font-size="8">REPAIR LINE</text>
+          </g>
+          <!-- QUARANTINE bin -->
+          <g id="bin-QUARANTINE">
+            <rect x="215" y="262" width="90" height="40" rx="4" fill="#130800" stroke="#ff6d00" stroke-width="1.5"/>
+            <rect x="215" y="262" width="90" height="8"  rx="4" fill="#231000"/>
+            <text x="260" y="279" text-anchor="middle" fill="#ff6d00" font-family="Orbitron,sans-serif" font-size="8" font-weight="700">QUARANTINE</text>
+            <text x="260" y="294" text-anchor="middle" fill="#552200" font-family="Share Tech Mono,monospace" font-size="8">HOLD / REVIEW</text>
+          </g>
+          <!-- SCRAP bin -->
+          <g id="bin-SCRAP">
+            <rect x="315" y="262" width="95" height="40" rx="4" fill="#120000" stroke="#ff1744" stroke-width="1.5"/>
+            <rect x="315" y="262" width="95" height="8"  rx="4" fill="#220000"/>
+            <text x="362" y="279" text-anchor="middle" fill="#ff1744" font-family="Orbitron,sans-serif" font-size="9" font-weight="700">SCRAP</text>
+            <text x="362" y="294" text-anchor="middle" fill="#550000" font-family="Share Tech Mono,monospace" font-size="8">DISCARD</text>
+          </g>
+
+          <!-- ── GANTRY ARM (moves along rail) ────────────────────────────── -->
+          <g id="arm-carriage" style="transition: transform 1.3s cubic-bezier(0.4,0,0.2,1);">
+            <!-- Carriage body on rail -->
+            <rect x="-22" y="22" width="44" height="18" rx="4" fill="#0f2040"/>
+            <rect x="-18" y="25" width="36" height="12" rx="3" fill="#0a1828"/>
+            <!-- Wheel indicators -->
+            <circle cx="-14" cy="28" r="3.5" fill="#00aaff" opacity="0.7" filter="url(#glow)"/>
+            <circle cx="14"  cy="28" r="3.5" fill="#00aaff" opacity="0.7" filter="url(#glow)"/>
+            <!-- Guide rail grab -->
+            <rect x="-8" y="20" width="16" height="6" rx="2" fill="#0d2a45"/>
+
+            <!-- Vertical arm shaft -->
+            <rect x="-5" y="40" width="10" height="192" rx="3" fill="#0f2040"/>
+            <rect x="-2" y="40" width="4"  height="192" rx="1" fill="#1a3a60" opacity="0.5"/>
+            <!-- Shaft accent lines -->
+            <rect x="-5" y="75"  width="10" height="4" rx="1" fill="#0a1828"/>
+            <rect x="-5" y="120" width="10" height="4" rx="1" fill="#0a1828"/>
+            <rect x="-5" y="165" width="10" height="4" rx="1" fill="#0a1828"/>
+
+            <!-- Pneumatic actuator detail -->
+            <rect x="-7" y="90" width="14" height="28" rx="3" fill="#0a1a30"/>
+            <rect x="-4" y="93" width="8"  height="22" rx="2" fill="#061220"/>
+
+            <!-- Elbow joint -->
+            <circle cx="0" cy="195" r="8" fill="#0e2238"/>
+            <circle cx="0" cy="195" r="5" fill="#00aaff" opacity="0.6" filter="url(#glow)"/>
+            <circle cx="0" cy="195" r="2" fill="#001830"/>
+
+            <!-- ── GRIPPER ──────────────────────────────────────────────── -->
+            <g id="gripper-assembly" transform="translate(0, 232)">
+              <!-- Wrist -->
+              <circle r="7" fill="#0e2238"/>
+              <circle r="4" fill="#00ccff" opacity="0.5"/>
+
+              <!-- Left jaw -->
+              <g id="jaw-left">
+                <rect x="-22" y="7" width="20" height="6"  rx="2" fill="#0f2040"/>
+                <rect x="-22" y="13" width="20" height="16" rx="2" fill="#0f2040"/>
+                <rect x="-20" y="14" width="16" height="2" rx="1" fill="#1a3a60" opacity="0.4"/>
+                <rect x="-20" y="18" width="16" height="2" rx="1" fill="#1a3a60" opacity="0.4"/>
+                <rect x="-20" y="22" width="16" height="2" rx="1" fill="#1a3a60" opacity="0.4"/>
+              </g>
+              <!-- Right jaw -->
+              <g id="jaw-right">
+                <rect x="2" y="7"  width="20" height="6"  rx="2" fill="#0f2040"/>
+                <rect x="2" y="13" width="20" height="16" rx="2" fill="#0f2040"/>
+                <rect x="4" y="14" width="16" height="2" rx="1" fill="#1a3a60" opacity="0.4"/>
+                <rect x="4" y="18" width="16" height="2" rx="1" fill="#1a3a60" opacity="0.4"/>
+                <rect x="4" y="22" width="16" height="2" rx="1" fill="#1a3a60" opacity="0.4"/>
+              </g>
+            </g>
+          </g>
+
+        </svg>
+      </section>
+
+      <!-- Claude Analysis ──────────────────────────────────────────────────── -->
+      <section class="panel analysis-panel">
+        <div class="panel-header">
+          <span class="panel-icon">◈</span>
+          <span>CLAUDE AI ANALYSIS</span>
+          <span class="powered-by">claude-sonnet-4-5</span>
+        </div>
+
+        <div class="analysis-body">
+          <!-- Verdict row -->
+          <div class="verdict-row">
+            <div class="verdict-badge" id="verdict-badge">— —</div>
+            <div class="confidence-wrap">
+              <span class="conf-label">CONFIDENCE</span>
+              <div class="conf-bar-track">
+                <div class="conf-bar-fill" id="conf-bar" style="width:0%"></div>
+              </div>
+              <span class="conf-value" id="conf-value">—</span>
+            </div>
+          </div>
+
+          <!-- Meta info -->
+          <div class="meta-grid">
+            <div class="meta-item">
+              <span class="meta-key">OBJECT</span>
+              <span class="meta-val" id="meta-object">—</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-key">SEVERITY</span>
+              <span class="meta-val severity" id="meta-severity">—</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-key">DEFECT TYPE</span>
+              <span class="meta-val" id="meta-defect">—</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-key">TIMESTAMP</span>
+              <span class="meta-val mono" id="meta-time">—</span>
+            </div>
+          </div>
+
+          <!-- Reasoning -->
+          <div class="reasoning-box">
+            <div class="reasoning-label">
+              <span class="blink-cursor">▌</span> EXPERT REASONING
+            </div>
+            <p class="reasoning-text" id="reasoning-text">
+              Waiting for object detection... Point the camera at any object to begin AI quality inspection.
+            </p>
+          </div>
+        </div>
+      </section>
+    </div><!-- /right-col -->
+
+  </main>
+
+  <!-- ── STATS ROW ──────────────────────────────────────────────────────────── -->
+  <section class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value" id="stat-total">0</div>
+      <div class="stat-label">TOTAL INSPECTED</div>
+    </div>
+    <div class="stat-card pass-card">
+      <div class="stat-value pass-color" id="stat-pass-rate">0%</div>
+      <div class="stat-label">PASS RATE</div>
+    </div>
+    <div class="stat-card rework-card">
+      <div class="stat-value rework-color" id="stat-rework">0</div>
+      <div class="stat-label">REWORK</div>
+    </div>
+    <div class="stat-card quarantine-card">
+      <div class="stat-value quarantine-color" id="stat-quarantine">0</div>
+      <div class="stat-label">QUARANTINE</div>
+    </div>
+    <div class="stat-card scrap-card">
+      <div class="stat-value scrap-color" id="stat-scrap">0</div>
+      <div class="stat-label">SCRAP</div>
+    </div>
+    <div class="stat-card chart-card">
+      <canvas id="pie-chart" width="110" height="110"></canvas>
+      <div class="stat-label">DEFECT BREAKDOWN</div>
+    </div>
+  </section>
+
+  <!-- ── INSPECTION LOG ─────────────────────────────────────────────────────── -->
+  <section class="log-section">
+    <div class="panel-header log-header">
+      <span class="panel-icon">◈</span>
+      <span>LIVE INSPECTION LOG</span>
+      <span class="log-count" id="log-count">0 records</span>
+    </div>
+    <div class="log-table-wrap">
+      <table class="log-table">
+        <thead>
+          <tr>
+            <th>TIME</th>
+            <th>OBJECT</th>
+            <th>VERDICT</th>
+            <th>SEVERITY</th>
+            <th>DEFECT TYPE</th>
+          </tr>
+        </thead>
+        <tbody id="log-tbody">
+          <tr class="log-empty">
+            <td colspan="5">No inspections yet — waiting for first detection</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

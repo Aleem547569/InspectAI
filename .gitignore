@@ -1,0 +1,10 @@
+env.txt
+.env
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+runs/
+.claude/
+app.js
+style.css
