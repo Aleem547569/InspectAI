@@ -59,6 +59,10 @@ CLAUDE_PROMPT = (
 def _run_yolo(frame):
     """Run YOLO synchronously. Returns (detections, best_det)."""
     h, w = frame.shape[:2]
+    # Resize to max 416px to reduce memory pressure on free tier
+    scale = min(416 / w, 416 / h, 1.0)
+    if scale < 1.0:
+        frame = cv2.resize(frame, (int(w * scale), int(h * scale)))
     results = model(frame, verbose=False, conf=0.10)
 
     detections = []
